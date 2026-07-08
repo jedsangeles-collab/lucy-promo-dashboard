@@ -201,11 +201,6 @@ input[type="checkbox"]{ accent-color:var(--accent); width:15px; height:15px; cur
 .chip-check{ display:inline-flex; align-items:center; gap:7px; padding:6px 13px; border-radius:999px; border:1px solid var(--border); background:var(--surface); font-size:12.5px; color:var(--ink-soft); cursor:pointer; user-select:none; }
 .chip-check:has(input:checked){ border-color:var(--accent); background:var(--accent-soft); color:var(--ink); }
 .sel-bar{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; background:var(--accent-soft); border:1px solid var(--accent-line); border-radius:10px; padding:9px 14px; margin-bottom:14px; font-size:13px; color:var(--ink); }
-.upload-card{ border:1px dashed var(--accent-line); background:var(--accent-soft); }
-input[type="file"]{ font-size:12.5px; color:var(--ink-soft); max-width:100%; }
-input[type="file"]::file-selector-button{ background:var(--surface); color:var(--ink); border:1px solid var(--border); border-radius:7px; padding:6px 12px; font-size:12.5px; font-weight:600; cursor:pointer; margin-right:10px; }
-input[type="file"]::file-selector-button:hover{ border-color:var(--accent); }
-.upload-msg.ok{ color:var(--good); } .upload-msg.err{ color:var(--bad); }
 
 .searchbox{ position:relative; }
 .searchbox input{ padding:7px 12px 7px 30px; border:1px solid var(--border); border-radius:7px; width:220px; background:var(--surface); }
@@ -469,190 +464,6 @@ function buildAlerts(){
 }
 var ALERTS = buildAlerts();
 
-/* ================= DAILY DATA UPLOAD ================= */
-var UPLOAD_STORAGE_KEY = 'lucyDashboardUpload_v1';
-var STORE_MONTHS = ['2026-04','2026-05'];
-var UPLOAD_INFO = { storesUpdatedAt:null, financialsUpdatedAt:null };
-
-function parseCSV(text){
-  var rows = []; var row = []; var field = ''; var inQuotes = false;
-  text = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n');
-  for(var i=0;i<text.length;i++){
-    var ch = text[i];
-    if(inQuotes){
-      if(ch==='"'){ if(text[i+1]==='"'){ field+='"'; i++; } else inQuotes=false; }
-      else field += ch;
-    } else {
-      if(ch==='"') inQuotes = true;
-      else if(ch===','){ row.push(field); field=''; }
-      else if(ch==='\n'){ row.push(field); rows.push(row); row=[]; field=''; }
-      else field += ch;
-    }
-  }
-  if(field.length || row.length){ row.push(field); rows.push(row); }
-  rows = rows.filter(function(r){ return !(r.length===1 && r[0]==='' ); });
-  if(!rows.length) return [];
-  var headers = rows[0].map(function(h){ return h.trim().toLowerCase(); });
-  return rows.slice(1).map(function(r){
-    var obj = {};
-    headers.forEach(function(h,i){ obj[h] = r[i]!==undefined? r[i].trim() : ''; });
-    return obj;
-  });
-}
-function parseBool(v){
-  if(v===undefined||v===null||v==='') return null;
-  var s = String(v).trim().toLowerCase();
-  return s==='true'||s==='yes'||s==='1'||s==='y';
-}
-function parseNum(v){
-  if(v===undefined||v===null||v==='') return null;
-  var n = parseFloat(String(v).replace(/[$,%]/g,''));
-  return isNaN(n)? null : n;
-}
-function normalizeChainName(raw){
-  var trimmed = raw.trim();
-  var hit = ALL_CHAINS.filter(function(n){ return n.toLowerCase()===trimmed.toLowerCase(); })[0];
-  return hit || trimmed;
-}
-// Only touches chainSummary rows for the exact (chain, month) keys just uploaded —
-// leaves every untouched chain's originally-sourced summary numbers exactly as baked in
-// (the raw per-visit `stores` sheet and the pre-aggregated summary sheet don't always
-// agree 1:1 for chains nobody re-uploaded, so a blanket recompute would silently drift them).
-function updateChainSummaryFor(touchedKeys){
-  DATA.chainSummary = DATA.chainSummary.filter(function(r){ return !touchedKeys[r.chain+'|'+r.month]; });
-  var groups = {};
-  DATA.stores.forEach(function(s){
-    var key = s.chain+'|'+s.month;
-    if(!touchedKeys[key]) return;
-    if(!groups[key]) groups[key] = { chain:s.chain, month:s.month, stores:[] };
-    groups[key].stores.push(s);
-  });
-  Object.keys(groups).forEach(function(key){
-    var g = groups[key], n = g.stores.length;
-    function pctOf(pred){ return n? Math.round(g.stores.filter(pred).length/n*100)+'%' : '0%'; }
-    DATA.chainSummary.push({
-      chain: g.chain, month: g.month, storeCount: n,
-      pctSiteVerified: pctOf(function(s){return s.siteVerified===true;}),
-      pctCarryingLucy: pctOf(function(s){return s.carriesLucy===true;}),
-      pctPOPMissing: pctOf(function(s){return s.popEndState===false;}),
-      pctPOPAdded: '0%',
-      pctNeedsProduct: pctOf(function(s){return s.needsProduct===true;}),
-      pctPOPCompliant: pctOf(function(s){return s.popEndState===true;})
-    });
-  });
-}
-function refreshAll(){
-  rebuildChainIndex();
-  ALERTS = buildAlerts();
-  if(typeof updateRailFoot==='function') updateRailFoot();
-  setTab(STATE.tab);
-}
-function saveUploadToStorage(){
-  try{
-    localStorage.setItem(UPLOAD_STORAGE_KEY, JSON.stringify({
-      stores: DATA.stores, chainSummary: DATA.chainSummary, chainRanking: DATA.chainRanking, info: UPLOAD_INFO
-    }));
-  } catch(e){ /* storage unavailable (private mode, quota) — upload still applies for this session */ }
-}
-function loadUploadFromStorage(){
-  var raw;
-  try{ raw = localStorage.getItem(UPLOAD_STORAGE_KEY); } catch(e){ return; }
-  if(!raw) return;
-  try{
-    var saved = JSON.parse(raw);
-    if(saved.stores) DATA.stores = saved.stores;
-    if(saved.chainSummary) DATA.chainSummary = saved.chainSummary;
-    if(saved.chainRanking) DATA.chainRanking = saved.chainRanking;
-    if(saved.info) UPLOAD_INFO = saved.info;
-    rebuildChainIndex();
-    ALERTS = buildAlerts();
-  } catch(e){ /* corrupt saved payload — ignore and keep baked-in data */ }
-}
-
-/* ---- Field visits (store-level) upload ---- */
-var STORES_REQUIRED_COLS = ['chain','month','address','city','state','healthscore','siteverified','carrieslucy','popendstate','needsproduct'];
-function ingestStoresCSV(text){
-  var records = parseCSV(text);
-  if(!records.length) return { ok:false, error:'No data rows found in that file.' };
-  var headers = Object.keys(records[0]);
-  var missing = STORES_REQUIRED_COLS.filter(function(c){ return headers.indexOf(c)<0; });
-  if(missing.length) return { ok:false, error:'Missing column(s): '+missing.join(', ')+'. See the template for the exact headers.' };
-
-  var accepted = [], skippedMonth = 0, skippedBad = 0;
-  records.forEach(function(r){
-    if(!r.chain || !r.month || !r.address){ skippedBad++; return; }
-    if(STORE_MONTHS.indexOf(r.month)<0){ skippedMonth++; return; }
-    accepted.push({
-      chain: normalizeChainName(r.chain), month: r.month, address: r.address, city: r.city, state: r.state,
-      healthScore: parseNum(r.healthscore), siteVerified: parseBool(r.siteverified), carriesLucy: parseBool(r.carrieslucy),
-      popEndState: parseBool(r.popendstate), needsProduct: parseBool(r.needsproduct)
-    });
-  });
-  if(!accepted.length) return { ok:false, error:'No usable rows — check that month values are 2026-04 or 2026-05, and chain/address/month are filled in.' };
-
-  var touched = {};
-  accepted.forEach(function(s){ touched[s.chain+'|'+s.month] = true; });
-  DATA.stores = DATA.stores.filter(function(s){ return !touched[s.chain+'|'+s.month]; }).concat(accepted);
-  updateChainSummaryFor(touched);
-  UPLOAD_INFO.storesUpdatedAt = new Date().toISOString();
-  saveUploadToStorage();
-  refreshAll();
-  var chainsTouched = Object.keys(touched).map(function(k){return k.split('|')[0];}).filter(function(v,i,a){return a.indexOf(v)===i;});
-  return { ok:true, message: accepted.length+' store visit(s) loaded across '+chainsTouched.length+' chain(s).'+(skippedMonth?' '+skippedMonth+' row(s) skipped (month outside Apr/May 2026).':'')+(skippedBad?' '+skippedBad+' row(s) skipped (missing chain/address/month).':'') };
-}
-
-/* ---- Rebate & financials (chain-level) upload ---- */
-var FIN_REQUIRED_COLS = ['chain','totalcanssold','estrevenue','totalrebate','paid','invoicedunpaid','avgcostpercan'];
-function ingestFinancialsCSV(text){
-  var records = parseCSV(text);
-  if(!records.length) return { ok:false, error:'No data rows found in that file.' };
-  var headers = Object.keys(records[0]);
-  var missing = FIN_REQUIRED_COLS.filter(function(c){ return headers.indexOf(c)<0; });
-  if(missing.length) return { ok:false, error:'Missing column(s): '+missing.join(', ')+'. See the template for the exact headers.' };
-
-  var accepted = [], skippedBad = 0;
-  records.forEach(function(r){
-    if(!r.chain){ skippedBad++; return; }
-    accepted.push({
-      chain: normalizeChainName(r.chain),
-      rank: 0,
-      activeMonths: parseNum(r.activemonths) || 0,
-      totalCansSold: parseNum(r.totalcanssold) || 0,
-      estRevenue: parseNum(r.estrevenue) || 0,
-      totalRebate: parseNum(r.totalrebate) || 0,
-      paid: parseNum(r.paid) || 0,
-      invoicedUnpaid: parseNum(r.invoicedunpaid) || 0,
-      estimated: parseNum(r.estimated) || 0,
-      avgCostPerCan: parseNum(r.avgcostpercan) || 0
-    });
-  });
-  if(!accepted.length) return { ok:false, error:'No usable rows — every row needs at least a chain name.' };
-
-  var byChain = {}; accepted.forEach(function(r){ byChain[r.chain]=r; });
-  DATA.chainRanking = DATA.chainRanking.filter(function(r){ return !byChain[r.chain]; }).concat(accepted);
-  DATA.chainRanking.sort(function(a,b){return b.estRevenue-a.estRevenue;}).forEach(function(r,i){ r.rank = i+1; });
-  UPLOAD_INFO.financialsUpdatedAt = new Date().toISOString();
-  saveUploadToStorage();
-  refreshAll();
-  return { ok:true, message: accepted.length+' chain(s) updated with new rebate/financial totals.' };
-}
-
-function downloadTemplate(kind){
-  var csv, name;
-  if(kind==='stores'){
-    csv = 'chain,month,address,city,state,healthScore,siteVerified,carriesLucy,popEndState,needsProduct\n'+
-          'Wawa,2026-05,123 Main St,Philadelphia,PA,3.5,true,true,true,false\n';
-    name = 'field_visits_template.csv';
-  } else {
-    csv = 'chain,totalCansSold,estRevenue,totalRebate,paid,invoicedUnpaid,avgCostPerCan\n'+
-          'Wawa,1210570,4115938,1288742,646988,248765,1.065\n';
-    name = 'rebate_financials_template.csv';
-  }
-  var blob = new Blob([csv], {type:'text/csv'});
-  var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-}
-
 /* ---------------- SVG chart helpers ---------------- */
 function svgEl(tag, attrs){
   var e = document.createElementNS('http://www.w3.org/2000/svg', tag);
@@ -816,13 +627,7 @@ function setTab(tab){
   renderers[tab]();
 }
 document.querySelectorAll('.navbtn').forEach(function(b){ b.addEventListener('click', function(){ setTab(b.getAttribute('data-tab')); }); });
-function updateRailFoot(){
-  var bits = ['Data: field visits Apr–May 2026 · promo/rebate ledger Jan 2025–May 2026.'];
-  if(UPLOAD_INFO.storesUpdatedAt) bits.push('Field visits refreshed '+new Date(UPLOAD_INFO.storesUpdatedAt).toLocaleString()+' (this browser).');
-  if(UPLOAD_INFO.financialsUpdatedAt) bits.push('Financials refreshed '+new Date(UPLOAD_INFO.financialsUpdatedAt).toLocaleString()+' (this browser).');
-  document.getElementById('railFoot').innerHTML = bits.join('<br>');
-}
-updateRailFoot();
+document.getElementById('railFoot').textContent = 'Data: field visits Apr–May 2026 · promo/rebate ledger Jan 2025–May 2026.';
 
 /* ================= OVERVIEW ================= */
 function renderOverview(){
@@ -837,20 +642,6 @@ function renderOverview(){
   var criticalAlerts = ALERTS.filter(function(a){return a.severity==='bad';}).length;
 
   var html = '';
-  html += '<div class="card upload-card" style="margin-bottom:22px;">';
-  html += '<div class="card-title">Update daily data</div>';
-  html += '<div class="section-sub" style="margin:0 0 14px;">Drop in today\'s exports to refresh every tab of this dashboard right here in your browser. To push the update to this shared link for everyone else, send Claude the same file(s) in chat and ask to republish.</div>';
-  html += '<div class="grid cols-2">';
-  html += '<div><div style="font-weight:700;font-size:13px;margin-bottom:6px;">Field visits (CSV)</div>'+
-    '<input type="file" id="uploadStores" accept=".csv"/>'+
-    '<div class="muted" style="font-size:11.5px;margin-top:6px;">chain, month, address, city, state, healthScore, siteVerified, carriesLucy, popEndState, needsProduct &middot; <a href="#" id="dlStoresTpl">download template</a></div>'+
-    '<div id="uploadStoresMsg" class="upload-msg" style="margin-top:8px;font-size:12.5px;"></div></div>';
-  html += '<div><div style="font-weight:700;font-size:13px;margin-bottom:6px;">Rebate &amp; financials (CSV)</div>'+
-    '<input type="file" id="uploadFinancials" accept=".csv"/>'+
-    '<div class="muted" style="font-size:11.5px;margin-top:6px;">chain, totalCansSold, estRevenue, totalRebate, paid, invoicedUnpaid, avgCostPerCan &middot; <a href="#" id="dlFinTpl">download template</a></div>'+
-    '<div id="uploadFinancialsMsg" class="upload-msg" style="margin-top:8px;font-size:12.5px;"></div></div>';
-  html += '</div></div>';
-
   html += '<div class="flow-mask"><div class="flow">'+['Data Collection','Standardization &amp; Joining','Analytics Engine','Insight Generation','Business Actions','Executive Dashboards'].map(function(s,i){
     return '<div class="flow-step'+(i===5?' current':'')+'"><div class="fnum">0'+(i+1)+'</div><div class="flabel">'+s+'</div></div>';
   }).join('')+'</div></div>';
@@ -874,28 +665,6 @@ function renderOverview(){
   html += '</div>';
 
   wrap.innerHTML = html;
-
-  document.getElementById('dlStoresTpl').addEventListener('click', function(e){ e.preventDefault(); downloadTemplate('stores'); });
-  document.getElementById('dlFinTpl').addEventListener('click', function(e){ e.preventDefault(); downloadTemplate('financials'); });
-  function wireUpload(inputId, msgId, ingestFn){
-    document.getElementById(inputId).addEventListener('change', function(e){
-      var file = e.target.files[0]; if(!file) return;
-      var msg = document.getElementById(msgId);
-      msg.className = 'upload-msg'; msg.textContent = 'Reading '+file.name+'…';
-      var reader = new FileReader();
-      reader.onload = function(){
-        var result = ingestFn(String(reader.result));
-        // ingestFn triggers a full dashboard re-render on success, which replaces this
-        // element — re-query it by id rather than reusing the (now possibly detached) reference.
-        var msgEl = document.getElementById(msgId);
-        if(msgEl){ msgEl.className = 'upload-msg '+(result.ok?'ok':'err'); msgEl.textContent = result.ok? result.message : result.error; }
-      };
-      reader.onerror = function(){ msg.className = 'upload-msg err'; msg.textContent = 'Could not read that file.'; };
-      reader.readAsText(file);
-    });
-  }
-  wireUpload('uploadStores', 'uploadStoresMsg', ingestStoresCSV);
-  wireUpload('uploadFinancials', 'uploadFinancialsMsg', ingestFinancialsCSV);
 
   // funnel mini bars: total site verified / carries lucy / pop compliant, apr vs may
   var aprTot = {sv:0,cl:0,cp:0,n:totalStoresApr}, mayTot = {sv:0,cl:0,cp:0,n:totalStoresMay};
@@ -1526,8 +1295,6 @@ function renderVelocity(){
 }
 
 /* ---------------- init ---------------- */
-loadUploadFromStorage();
-updateRailFoot();
 setTab('overview');
 })();
 

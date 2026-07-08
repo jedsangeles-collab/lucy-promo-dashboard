@@ -1298,7 +1298,6 @@ function renderCategory(){
         return '<input type="checkbox" class="rowchk" data-chain="'+esc(r.name)+'"'+(STATE.categorySelectedChains.has(r.name)?' checked':'')+'/>';
       }},
       {key:'name', label:'Chain'},
-      {key:'storeCount', label:'Stores', num:true},
       {key:'avgHealth', label:'Health', num:true, render:function(r){return healthPill(r.avgHealth);}},
       {key:'pctCompliant', label:'% Compliant', num:true, render:function(r){return fmtPct(r.pctCompliant);}},
       {key:'cansSold', label:'Cans sold (life)', num:true, render:function(r){return fmtNum(r.cansSold);}},
@@ -1388,7 +1387,6 @@ function renderVelocity(){
       {key:'name', label:'Chain'},
       {key:'monthUsed', label:'Month used', render:function(r){return r.monthUsed || '<span class="muted">—</span>';}},
       {key:'basis', label:'Basis', render:function(r){return r.basis? ('<span class="pill '+(r.basis==='Measured'?'good':'neutral')+'">'+r.basis+'</span>') : '<span class="muted">—</span>';}},
-      {key:'storeCount', label:'Stores', num:true},
       {key:'cansSold', label:'Cans sold (mo.)', num:true, render:function(r){return fmtNum(r.cansSold);}},
       {key:'velocity', label:'Cans / store / week', num:true, render:function(r){return r.velocity!==null? '<b>'+r.velocity.toFixed(1)+'</b>' : '<span class="muted">—</span>';}},
       {key:'deltaPct', label:'vs prior data point', num:true, render:function(r){

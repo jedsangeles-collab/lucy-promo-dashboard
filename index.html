@@ -1076,7 +1076,21 @@ function renderCategory(){
     }
     html2 += '</div>';
 
-    // ---- 2. Chain Velocity Trend ----
+    // ---- 2. Site Visit Report History ----
+    html2 += '<div class="card" style="margin-top:16px;">';
+    html2 += '<div class="card-title">Site Visit Report History'+(STATE.categoryExpandedAddress? (' — '+esc(STATE.categoryExpandedAddress.split('|')[0])) : '')+'</div>';
+    if(!allVisits.length){
+      html2 += '<div class="section-sub" style="margin:0;">No site visits recorded for this '+(STATE.categoryExpandedAddress?'store':'chain')+'.</div>';
+    } else {
+      html2 += '<div class="section-sub" style="margin:0 0 10px;">'+allVisits.length+' visit'+(allVisits.length>1?'s':'')+' across Apr–May 2026. Click a column to sort'+(STATE.categoryExpandedAddress?'.':'; filter by store below.')+'</div>';
+      if(!STATE.categoryExpandedAddress){
+        html2 += '<div class="searchbox" style="margin-bottom:12px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="catVisitSearch" placeholder="Filter by store address…" value="'+esc(STATE.categoryVisitSearch)+'"/></div>';
+      }
+      html2 += '<div class="table-wrap"><div id="catVisitTable"></div></div>';
+    }
+    html2 += '</div>';
+
+    // ---- 3. Chain Velocity Trend ----
     html2 += '<div class="card" style="margin-top:16px;">';
     html2 += '<div class="card-title">Chain Velocity Trend</div>';
     html2 += '<div class="section-sub" style="margin:0 0 12px;">Chain-wide cans/store/week over time — no per-store sales data exists in this dataset, so this trend is <b>chain-level, not broken out by store</b>. '+
@@ -1088,20 +1102,6 @@ function renderCategory(){
         (tArrow.pct!==null? ('<span class="muted">('+(tArrow.pct>=0?'+':'')+tArrow.pct.toFixed(0)+'% vs prior data point)</span>') : '')+
         '</div>';
       html2 += '<div id="catVeloChart"></div>';
-    }
-    html2 += '</div>';
-
-    // ---- 3. Site Visit Report History ----
-    html2 += '<div class="card" style="margin-top:16px;">';
-    html2 += '<div class="card-title">Site Visit Report History'+(STATE.categoryExpandedAddress? (' — '+esc(STATE.categoryExpandedAddress.split('|')[0])) : '')+'</div>';
-    if(!allVisits.length){
-      html2 += '<div class="section-sub" style="margin:0;">No site visits recorded for this '+(STATE.categoryExpandedAddress?'store':'chain')+'.</div>';
-    } else {
-      html2 += '<div class="section-sub" style="margin:0 0 10px;">'+allVisits.length+' visit'+(allVisits.length>1?'s':'')+' across Apr–May 2026. Click a column to sort'+(STATE.categoryExpandedAddress?'.':'; filter by store below.')+'</div>';
-      if(!STATE.categoryExpandedAddress){
-        html2 += '<div class="searchbox" style="margin-bottom:12px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="catVisitSearch" placeholder="Filter by store address…" value="'+esc(STATE.categoryVisitSearch)+'"/></div>';
-      }
-      html2 += '<div class="table-wrap"><div id="catVisitTable"></div></div>';
     }
     html2 += '</div>';
 

@@ -1205,6 +1205,7 @@ function renderCategory(){
   html += '<div class="tabs-inline" id="catFilters">'+CATEGORY_FILTERS.map(function(f){
     return '<label class="chip-check"><input type="checkbox" data-fkey="'+f.key+'"'+(STATE.categoryFilters[f.key]?' checked':'')+'/>'+esc(f.label)+'</label>';
   }).join('')+'</div>';
+  html += '<div id="catBackBar"></div>';
   html += '<div id="catSelBar"></div>';
   html += '<div class="table-wrap"><div id="catTable"></div></div>';
   html += '<div id="catExpand"></div>';
@@ -1376,11 +1377,24 @@ function renderCategory(){
   }
 
   function draw(){
-    var rows = categoryRows().filter(function(r){
-      return !STATE.categorySearch || r.name.toLowerCase().indexOf(STATE.categorySearch.toLowerCase())>=0;
-    });
-    CATEGORY_FILTERS.forEach(function(f){ if(STATE.categoryFilters[f.key]) rows = rows.filter(f.test); });
+    var rows;
+    if(STATE.categoryExpandedChain){
+      rows = categoryRows().filter(function(r){ return r.name===STATE.categoryExpandedChain; });
+    } else {
+      rows = categoryRows().filter(function(r){
+        return !STATE.categorySearch || r.name.toLowerCase().indexOf(STATE.categorySearch.toLowerCase())>=0;
+      });
+      CATEGORY_FILTERS.forEach(function(f){ if(STATE.categoryFilters[f.key]) rows = rows.filter(f.test); });
+    }
     lastRows = rows;
+
+    var backBar = document.getElementById('catBackBar');
+    if(STATE.categoryExpandedChain){
+      backBar.innerHTML = '<button class="ctrl-btn" id="catShowAll" style="margin-bottom:12px;">← Show all chains</button>';
+      document.getElementById('catShowAll').addEventListener('click', function(){ STATE.categoryExpandedChain=null; draw(); });
+    } else {
+      backBar.innerHTML = '';
+    }
 
     renderSelBar();
 
@@ -1402,7 +1416,7 @@ function renderCategory(){
       {key:'negMonths', label:'Loss months', num:true, render:function(r){return r.negMonths>0?'<span class="pill bad">'+r.negMonths+'</span>':'<span class="pill good">0</span>';}}
     ], rows, {initialSort:'estRevenue', onRowClick:function(r){
       STATE.categoryExpandedChain = (STATE.categoryExpandedChain===r.name)? null : r.name;
-      drawExpand();
+      draw();
     }});
 
     drawExpand();

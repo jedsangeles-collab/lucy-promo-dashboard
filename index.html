@@ -1069,7 +1069,7 @@ function renderCategory(){
       HEALTH_NOTE_CATEGORIES.forEach(function(c, i){ if(c.test(text)){ counts[i].count++; matched = true; } });
       if(!matched) uncategorized++;
     });
-    return { total: withText.length, counts: counts.filter(function(c){return c.count>0;}).sort(function(a,b){return b.count-a.count;}), uncategorized: uncategorized };
+    return { total: withText.length, counts: counts.slice().sort(function(a,b){return b.count-a.count;}), uncategorized: uncategorized };
   }
 
   function drawExpand(){
@@ -1093,12 +1093,12 @@ function renderCategory(){
     var noteStats = categorizeVisitNotes(allVisits);
     var aprNoteStats = categorizeVisitNotes(aprVisits);
     var mayNoteStats = categorizeVisitNotes(mayVisits);
-    var showNoteMoM = aprNoteStats.total>0 && mayNoteStats.total>0;
     var noteMoMRows = HEALTH_NOTE_CATEGORIES.map(function(cat){
       var aprC = (aprNoteStats.counts.filter(function(x){return x.key===cat.key;})[0]||{count:0}).count;
       var mayC = (mayNoteStats.counts.filter(function(x){return x.key===cat.key;})[0]||{count:0}).count;
       return { label:cat.label, apr:aprC, may:mayC, delta: mayC-aprC, total: aprC+mayC };
-    }).filter(function(r){ return r.apr>0 || r.may>0; }).sort(function(a,b){ return b.total-a.total; });
+    }).sort(function(a,b){ return b.total-a.total; });
+    var noteMoMMax = Math.max.apply(null, noteMoMRows.map(function(r){return Math.max(r.apr,r.may);}).concat([1]));
 
     var html2 = '<h2 class="section-title">Chain Performance — '+esc(name)+'</h2>';
 
@@ -1134,18 +1134,15 @@ function renderCategory(){
     // ---- 3. Health Report Metrics (categorized from the visit notes above) ----
     html2 += '<div class="card" style="margin-top:16px;">';
     html2 += '<div class="card-title">Health Report Metrics</div>';
-    html2 += '<div class="section-sub" style="margin:0 0 12px;">What the rep notes on those visits actually say, grouped by theme — categorized from free text, not a field in the source data, so a single visit can land in more than one bucket.</div>';
-    if(!noteStats.total){
-      html2 += '<div class="muted">No visits with notes or out-of-stock detail for this '+(STATE.categoryExpandedAddress?'store':'chain')+'.</div>';
-    } else {
-      html2 += '<div id="catNoteChart"></div>';
-      html2 += '<div class="muted" style="margin-top:8px;font-size:12px;">'+noteStats.total+' of '+allVisits.length+' visit'+(allVisits.length>1?'s':'')+' had a note or stock-out detail'+(noteStats.uncategorized? ('; '+noteStats.uncategorized+' didn\'t match a known theme') : '')+'.</div>';
-      if(showNoteMoM){
-        html2 += '<h2 class="section-title" style="margin-top:20px;font-size:14px;">April vs May — by theme</h2>';
-        html2 += '<div class="section-sub" style="margin:0 0 10px;">Only shown when both months have notes to compare. A rising count means that theme showed up in more visits in May than April — not necessarily more stores, since one store can be flagged more than once.</div>';
-        html2 += '<div class="table-wrap"><div id="catNoteMoMTable"></div></div>';
-      }
-    }
+    html2 += '<div class="section-sub" style="margin:0 0 12px;">What the rep notes on those visits actually say, grouped by theme — categorized from free text, not a field in the source data, so a single visit can land in more than one bucket. Shown for all themes, including those with zero visits so far.</div>';
+    html2 += '<div id="catNoteChart"></div>';
+    html2 += '<div class="muted" style="margin-top:8px;font-size:12px;">'+noteStats.total+' of '+allVisits.length+' visit'+(allVisits.length>1?'s':'')+' had a note or stock-out detail'+(noteStats.uncategorized? ('; '+noteStats.uncategorized+' didn\'t match a known theme') : '')+'.</div>';
+    html2 += '<h2 class="section-title" style="margin-top:20px;font-size:14px;">April vs May — by theme</h2>';
+    html2 += '<div class="section-sub" style="margin:0 0 10px;">A rising count means that theme showed up in more visits in May than April — not necessarily more stores, since one store can be flagged more than once. Shown even when one or both months have no notes at all.</div>';
+    html2 += '<div class="grid cols-2">';
+    html2 += '<div><div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">April</div><div id="catNoteChartApr"></div></div>';
+    html2 += '<div><div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">May</div><div id="catNoteChartMay"></div></div>';
+    html2 += '</div>';
     html2 += '</div>';
 
     // ---- 4. Chain Velocity Trend ----
@@ -1168,25 +1165,18 @@ function renderCategory(){
     var showAllStoresBtn = document.getElementById('catShowAllStores');
     if(showAllStoresBtn) showAllStoresBtn.addEventListener('click', function(){ STATE.categoryExpandedAddress=null; drawExpand(); });
 
-    if(noteStats.total){
-      var noteChartEl = document.getElementById('catNoteChart');
-      noteChartEl.appendChild(barChartH({
-        data: noteStats.counts.map(function(c){ return {label:c.label, value:c.count, color:COLOR_ACCENT, fmt:c.count+' visit'+(c.count>1?'s':'')}; }),
-        width: 560, labelW: 200
-      }));
-      if(showNoteMoM){
-        renderTable(document.getElementById('catNoteMoMTable'), [
-          {key:'label', label:'Theme'},
-          {key:'apr', label:'Apr', num:true},
-          {key:'may', label:'May', num:true},
-          {key:'delta', label:'Change', num:true, render:function(r){
-            if(r.delta===0) return '<span class="muted">—</span>';
-            var cls = r.delta>0?'bad':'good', arrow = r.delta>0?'▲':'▼';
-            return '<span class="pill '+cls+'">'+arrow+' '+Math.abs(r.delta)+'</span>';
-          }}
-        ], noteMoMRows, {initialSort:'total', initialDir:'desc'});
-      }
-    }
+    document.getElementById('catNoteChart').appendChild(barChartH({
+      data: noteStats.counts.map(function(c){ return {label:c.label, value:c.count, color:COLOR_ACCENT, fmt:c.count+' visit'+(c.count===1?'':'s')}; }),
+      width: 560, labelW: 200
+    }));
+    document.getElementById('catNoteChartApr').appendChild(barChartH({
+      data: noteMoMRows.map(function(r){ return {label:r.label, value:r.apr, color:COLOR_ACCENT, fmt:r.apr+' visit'+(r.apr===1?'':'s')}; }),
+      width: 500, labelW: 180, max: noteMoMMax
+    }));
+    document.getElementById('catNoteChartMay').appendChild(barChartH({
+      data: noteMoMRows.map(function(r){ return {label:r.label, value:r.may, color:(r.delta>0?COLOR_BAD:r.delta<0?COLOR_GOOD:COLOR_ACCENT), fmt:r.may+' visit'+(r.may===1?'':'s')+(r.delta? (' ('+(r.delta>0?'+':'')+r.delta+' vs Apr)') : '')}; }),
+      width: 500, labelW: 180, max: noteMoMMax
+    }));
 
     if(stores.length){
       renderTable(document.getElementById('catExpandTable'), [

@@ -1082,11 +1082,23 @@ function renderCategory(){
       return (b.healthScore===null?-1:b.healthScore) - (a.healthScore===null?-1:a.healthScore);
     });
     var stores = STATE.categoryExpandedAddress? allStores.filter(function(s){return addressKey(s)===STATE.categoryExpandedAddress;}) : allStores;
-    var allVisits = c.storesByMonth['2026-04'].concat(c.storesByMonth['2026-05']);
-    if(STATE.categoryExpandedAddress) allVisits = allVisits.filter(function(s){return addressKey(s)===STATE.categoryExpandedAddress;});
+    var aprVisits = c.storesByMonth['2026-04'], mayVisits = c.storesByMonth['2026-05'];
+    if(STATE.categoryExpandedAddress){
+      aprVisits = aprVisits.filter(function(s){return addressKey(s)===STATE.categoryExpandedAddress;});
+      mayVisits = mayVisits.filter(function(s){return addressKey(s)===STATE.categoryExpandedAddress;});
+    }
+    var allVisits = aprVisits.concat(mayVisits);
     var trend = chainVelocityTrend(name);
     var tArrow = trendArrow(trend);
     var noteStats = categorizeVisitNotes(allVisits);
+    var aprNoteStats = categorizeVisitNotes(aprVisits);
+    var mayNoteStats = categorizeVisitNotes(mayVisits);
+    var showNoteMoM = aprNoteStats.total>0 && mayNoteStats.total>0;
+    var noteMoMRows = HEALTH_NOTE_CATEGORIES.map(function(cat){
+      var aprC = (aprNoteStats.counts.filter(function(x){return x.key===cat.key;})[0]||{count:0}).count;
+      var mayC = (mayNoteStats.counts.filter(function(x){return x.key===cat.key;})[0]||{count:0}).count;
+      return { label:cat.label, apr:aprC, may:mayC, delta: mayC-aprC, total: aprC+mayC };
+    }).filter(function(r){ return r.apr>0 || r.may>0; }).sort(function(a,b){ return b.total-a.total; });
 
     var html2 = '<h2 class="section-title">Chain Performance — '+esc(name)+'</h2>';
 
@@ -1128,6 +1140,11 @@ function renderCategory(){
     } else {
       html2 += '<div id="catNoteChart"></div>';
       html2 += '<div class="muted" style="margin-top:8px;font-size:12px;">'+noteStats.total+' of '+allVisits.length+' visit'+(allVisits.length>1?'s':'')+' had a note or stock-out detail'+(noteStats.uncategorized? ('; '+noteStats.uncategorized+' didn\'t match a known theme') : '')+'.</div>';
+      if(showNoteMoM){
+        html2 += '<h2 class="section-title" style="margin-top:20px;font-size:14px;">April vs May — by theme</h2>';
+        html2 += '<div class="section-sub" style="margin:0 0 10px;">Only shown when both months have notes to compare. A rising count means that theme showed up in more visits in May than April — not necessarily more stores, since one store can be flagged more than once.</div>';
+        html2 += '<div class="table-wrap"><div id="catNoteMoMTable"></div></div>';
+      }
     }
     html2 += '</div>';
 
@@ -1157,6 +1174,18 @@ function renderCategory(){
         data: noteStats.counts.map(function(c){ return {label:c.label, value:c.count, color:COLOR_ACCENT, fmt:c.count+' visit'+(c.count>1?'s':'')}; }),
         width: 560, labelW: 200
       }));
+      if(showNoteMoM){
+        renderTable(document.getElementById('catNoteMoMTable'), [
+          {key:'label', label:'Theme'},
+          {key:'apr', label:'Apr', num:true},
+          {key:'may', label:'May', num:true},
+          {key:'delta', label:'Change', num:true, render:function(r){
+            if(r.delta===0) return '<span class="muted">—</span>';
+            var cls = r.delta>0?'bad':'good', arrow = r.delta>0?'▲':'▼';
+            return '<span class="pill '+cls+'">'+arrow+' '+Math.abs(r.delta)+'</span>';
+          }}
+        ], noteMoMRows, {initialSort:'total', initialDir:'desc'});
+      }
     }
 
     if(stores.length){

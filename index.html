@@ -1044,6 +1044,34 @@ function renderCategory(){
     return {arrow:'➡️', label:'Flat/Stable', pct:pct};
   }
 
+  // Keyword categorization of visit notes/oosItems — derived from reading the actual
+  // free-text values in this dataset (no fixed category field exists in the source data).
+  // A note can match more than one category (e.g. "needs berry citrus and more facings"
+  // is both a restock and a facing-shortage issue), so counts don't need to sum to visit count.
+  var HEALTH_NOTE_CATEGORIES = [
+    {key:'restock', label:'Restock / Out of Stock', test:function(t){ return /restock|\boos\b|out of stock|need[s]? (apple|berry|mango|mint|wintergreen|breaker|pouch)|low in one|empty/.test(t); }},
+    {key:'strip', label:'Missing Shelf Strip / POP', test:function(t){ return /shelf strip|marketing strip|velo strip|shelfstrip/.test(t); }},
+    {key:'facing', label:'Facing / Space Shortage', test:function(t){ return /facing|\bslots?\b|more (skus|space)/.test(t); }},
+    {key:'visibility', label:'Poor Visibility / Placement', test:function(t){ return /visibility|tag in front|blocked|hard to see/.test(t); }},
+    {key:'competitor', label:'Competitor Encroachment', test:function(t){ return /get (fre|zyn|grizzly|rogue|sesh|on!|zone|zonnic|velo) out|other brands? out|mixed in with other brands/.test(t); }},
+    {key:'organization', label:'Merchandising / Organization', test:function(t){ return /organiz|messy|acrylic display|better display/.test(t); }},
+    {key:'flavors', label:'Limited Flavor Assortment', test:function(t){ return /only \d+ flavor|few flavors|\d+ flavors\b/.test(t); }},
+    {key:'escalate', label:'Escalation Needed (Cat. Manager)', test:function(t){ return /cat(egory)? manager/.test(t); }},
+    {key:'notcarried', label:'Not Carried on Shelf', test:function(t){ return /no lucy|i dont see any lucy|completely oos|doesn.?t carry/.test(t); }}
+  ];
+  function categorizeVisitNotes(visits){
+    var withText = visits.filter(function(s){ return s.notes || s.oosItems; });
+    var counts = HEALTH_NOTE_CATEGORIES.map(function(c){ return {key:c.key, label:c.label, count:0}; });
+    var uncategorized = 0;
+    withText.forEach(function(s){
+      var text = ((s.notes||'')+' '+(s.oosItems||'')).toLowerCase();
+      var matched = false;
+      HEALTH_NOTE_CATEGORIES.forEach(function(c, i){ if(c.test(text)){ counts[i].count++; matched = true; } });
+      if(!matched) uncategorized++;
+    });
+    return { total: withText.length, counts: counts.filter(function(c){return c.count>0;}).sort(function(a,b){return b.count-a.count;}), uncategorized: uncategorized };
+  }
+
   function drawExpand(){
     var box = document.getElementById('catExpand');
     if(!STATE.categoryExpandedChain){ box.innerHTML=''; return; }
@@ -1058,6 +1086,7 @@ function renderCategory(){
     if(STATE.categoryExpandedAddress) allVisits = allVisits.filter(function(s){return addressKey(s)===STATE.categoryExpandedAddress;});
     var trend = chainVelocityTrend(name);
     var tArrow = trendArrow(trend);
+    var noteStats = categorizeVisitNotes(allVisits);
 
     var html2 = '<h2 class="section-title">Chain Performance — '+esc(name)+'</h2>';
 
@@ -1090,7 +1119,19 @@ function renderCategory(){
     }
     html2 += '</div>';
 
-    // ---- 3. Chain Velocity Trend ----
+    // ---- 3. Health Report Metrics (categorized from the visit notes above) ----
+    html2 += '<div class="card" style="margin-top:16px;">';
+    html2 += '<div class="card-title">Health Report Metrics</div>';
+    html2 += '<div class="section-sub" style="margin:0 0 12px;">What the rep notes on those visits actually say, grouped by theme — categorized from free text, not a field in the source data, so a single visit can land in more than one bucket.</div>';
+    if(!noteStats.total){
+      html2 += '<div class="muted">No visits with notes or out-of-stock detail for this '+(STATE.categoryExpandedAddress?'store':'chain')+'.</div>';
+    } else {
+      html2 += '<div id="catNoteChart"></div>';
+      html2 += '<div class="muted" style="margin-top:8px;font-size:12px;">'+noteStats.total+' of '+allVisits.length+' visit'+(allVisits.length>1?'s':'')+' had a note or stock-out detail'+(noteStats.uncategorized? ('; '+noteStats.uncategorized+' didn\'t match a known theme') : '')+'.</div>';
+    }
+    html2 += '</div>';
+
+    // ---- 4. Chain Velocity Trend ----
     html2 += '<div class="card" style="margin-top:16px;">';
     html2 += '<div class="card-title">Chain Velocity Trend</div>';
     html2 += '<div class="section-sub" style="margin:0 0 12px;">Chain-wide cans/store/week over time — no per-store sales data exists in this dataset, so this trend is <b>chain-level, not broken out by store</b>. '+
@@ -1109,6 +1150,14 @@ function renderCategory(){
 
     var showAllStoresBtn = document.getElementById('catShowAllStores');
     if(showAllStoresBtn) showAllStoresBtn.addEventListener('click', function(){ STATE.categoryExpandedAddress=null; drawExpand(); });
+
+    if(noteStats.total){
+      var noteChartEl = document.getElementById('catNoteChart');
+      noteChartEl.appendChild(barChartH({
+        data: noteStats.counts.map(function(c){ return {label:c.label, value:c.count, color:COLOR_ACCENT, fmt:c.count+' visit'+(c.count>1?'s':'')}; }),
+        width: 560, labelW: 200
+      }));
+    }
 
     if(stores.length){
       renderTable(document.getElementById('catExpandTable'), [

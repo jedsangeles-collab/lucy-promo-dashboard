@@ -769,12 +769,12 @@ function renderMap(){
     return colorScale3(t, COLOR_BAD, COLOR_WARN, COLOR_GOOD);
   }
 
-  var html = '<div class="grid cols-2" style="align-items:start;">';
-  html += '<div class="card"><div class="card-title">Store execution by state</div><div id="mapSvgWrap"></div>';
+  var html = '<div class="card" style="max-width:min(100%, 1180px); margin:0 auto;">';
+  html += '<div class="card-title">Store execution by state</div><div id="mapSvgWrap"></div>';
   html += '<div class="map-scale"><span>'+(metric==='pctGap'?'Higher gap %':'Lower')+'</span><span class="bar"></span><span>'+(metric==='pctGap'?'Fully compliant':'Higher')+'</span></div>';
-  html += '<div class="section-sub">Click a state to filter the store list below. Bubble position is each state\'s real geographic center; individual dots are real store coordinates where available (AK/HI shown as fixed insets, not to scale, same as printed US maps).</div></div>';
-  html += '<div class="card"><div class="card-title" id="stateListTitle">'+(STATE.selectedState? stateName(STATE.selectedState) : 'All flagged stores')+'</div><div id="stateStoreList"></div></div>';
+  html += '<div class="section-sub">Click a state to filter the store list below. Bubble position is each state\'s real geographic center; individual dots are real store coordinates where available (AK/HI shown as fixed insets, not to scale, same as printed US maps).</div>';
   html += '</div>';
+  html += '<div class="card" style="margin-top:16px;"><div class="card-title" id="stateListTitle">'+(STATE.selectedState? stateName(STATE.selectedState) : 'All flagged stores')+'</div><div id="stateStoreList"></div></div>';
   wrap.innerHTML = html;
 
   var svg = svgEl('svg', {viewBox:'0 0 '+MAP_W+' '+MAP_H, class:'chart', width:'100%', height:'auto'});
@@ -785,7 +785,7 @@ function renderMap(){
     if(!s.lat || !s.lon) return;
     var p = projectGeo(s.lat, s.lon);
     if(p.x<0||p.x>MAP_W||p.y<0||p.y>MAP_H) return;
-    svg.appendChild(svgEl('circle', {cx:p.x, cy:p.y, r:1.6, fill:cv('--ink-faint'), opacity:0.35}));
+    svg.appendChild(svgEl('circle', {cx:p.x, cy:p.y, r:2.2, fill:cv('--ink-faint'), opacity:0.35}));
   });
 
   Object.keys(US_STATE_CENTROIDS).concat(['AK','HI']).forEach(function(key){
@@ -794,12 +794,12 @@ function renderMap(){
     }
     var p = (key==='AK'||key==='HI')? MAP_INSETS[key] : projectGeo(US_STATE_CENTROIDS[key][0], US_STATE_CENTROIDS[key][1]);
     var d = stateIdx[key];
-    var r = d? (6 + 14*Math.sqrt(d.count/maxCount)) : 3;
+    var r = d? (8 + 18*Math.sqrt(d.count/maxCount)) : 4;
     var g = svgEl('g', {'data-key':key, style:'cursor:pointer;'});
     var circle = svgEl('circle', {cx:p.x, cy:p.y, r:r, fill: d? colorFor(d) : cv('--surface-2'), stroke: STATE.selectedState===key? cv('--gold') : cv('--border'), 'stroke-width': STATE.selectedState===key?2.5:1});
     g.appendChild(circle);
-    if(r>=9){
-      var label = svgEl('text', {x:p.x, y:p.y+3.5, 'text-anchor':'middle', 'font-size':10, 'font-family':'var(--font-mono)', 'font-weight':600, fill: d? '#12171A' : cv('--ink-faint')});
+    if(r>=8){
+      var label = svgEl('text', {x:p.x, y:p.y+3.5, 'text-anchor':'middle', 'font-size':11, 'font-family':'var(--font-mono)', 'font-weight':600, fill: d? '#12171A' : cv('--ink-faint')});
       label.textContent = key;
       g.appendChild(label);
     }

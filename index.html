@@ -993,9 +993,8 @@ function categoryRows(){
     var c = chainIndex[n]; var r = c.ranking;
     var s = c.summary['2026-05'] || c.summary['2026-04'];
     var h = c.avgHealthMay!==null? c.avgHealthMay : c.avgHealthApr;
-    var distinctCount = distinctStores(c).length;
     return {
-      name:n, distinctStoreCount: distinctCount>0?distinctCount:null, storeCount: s?s.storeCount:null, avgHealth:h,
+      name:n, storeCount: s?s.storeCount:null, avgHealth:h,
       pctCompliant: s?pct(s.pctPOPCompliant):null,
       cansSold: r?r.totalCansSold:null, estRevenue: r?r.estRevenue:null,
       paid: r?r.paid:null, invoicedUnpaid: r?r.invoicedUnpaid:null,
@@ -1006,18 +1005,6 @@ function categoryRows(){
 }
 function storeId(s){ return s.chain+'|'+s.month+'|'+s.address; }
 function addressKey(s){ return s.address+'|'+s.city+'|'+s.state; }
-// One row per distinct real store address, combining April + May — a store visited in only one
-// of the two months still counts and still shows up, instead of being dropped by whichever single
-// month a view happens to prefer. When a store was visited in both months, the May record wins
-// (more current health score); April's record is what's used for stores never revisited in May.
-// This is still built entirely from visit records — there's no source of stores that were NEVER
-// visited at all, so it's the full set of "stores we have any evidence of", not a master roster.
-function distinctStores(c){
-  var byAddr = {};
-  c.storesByMonth['2026-04'].forEach(function(s){ byAddr[addressKey(s)] = s; });
-  c.storesByMonth['2026-05'].forEach(function(s){ byAddr[addressKey(s)] = s; });
-  return Object.keys(byAddr).map(function(k){ return byAddr[k]; });
-}
 function renderCategory(){
   var wrap = document.getElementById('pageWrap');
   document.getElementById('topControls').innerHTML = '<div class="searchbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="catSearch" placeholder="Search chain…" value="'+esc(STATE.categorySearch)+'"/></div>';
@@ -1129,7 +1116,8 @@ function renderCategory(){
     if(!STATE.categoryExpandedChain){ box.innerHTML=''; return; }
     var name = STATE.categoryExpandedChain;
     var c = chainIndex[name];
-    var allStores = distinctStores(c).slice().sort(function(a,b){
+    var storeMonth = c.storesByMonth['2026-05'].length? '2026-05' : '2026-04';
+    var allStores = c.storesByMonth[storeMonth].slice().sort(function(a,b){
       return (b.healthScore===null?-1:b.healthScore) - (a.healthScore===null?-1:a.healthScore);
     });
     var stores = STATE.categoryExpandedAddress? allStores.filter(function(s){return addressKey(s)===STATE.categoryExpandedAddress;}) : allStores;
@@ -1156,14 +1144,14 @@ function renderCategory(){
 
     // ---- 1. Store Health Scores ----
     html2 += '<div class="card">';
-    html2 += '<div class="card-title">Store Health Scores — every distinct store visited (Apr or May), ranked highest to lowest</div>';
+    html2 += '<div class="card-title">Store Health Scores ('+MONTH_LABEL[storeMonth]+') — ranked highest to lowest</div>';
     if(STATE.categoryExpandedAddress){
       html2 += '<button class="ctrl-btn" id="catShowAllStores" style="margin-bottom:12px;">← Show all stores</button>';
     }
     if(!allStores.length){
       html2 += '<div class="section-sub" style="margin:0;">No field-visit records for this chain in the tracked months.</div>';
     } else {
-      html2 += '<div class="section-sub" style="margin:0 0 12px;">'+stores.length+' distinct store'+(stores.length>1?'s':'')+' — combines April and May visits (May\'s data used where a store has both); this is not a full store roster, only stores we have a visit record for, in either month'+(STATE.categoryExpandedAddress?'':' · tick to select, click a row to see that store\'s visit history')+'.</div>';
+      html2 += '<div class="section-sub" style="margin:0 0 12px;">'+stores.length+' store visit'+(stores.length>1?'s':'')+(STATE.categoryExpandedAddress?'':' · tick to select, click a row to see that store\'s visit history')+'.</div>';
       html2 += '<div class="table-wrap"><div id="catExpandTable"></div></div>';
       html2 += '<div id="catExpandSelInfo" class="muted" style="margin-top:8px;font-size:12px;"></div>';
       if(STATE.categoryExpandedAddress){
@@ -1259,7 +1247,6 @@ function renderCategory(){
       renderTable(document.getElementById('catExpandTable'), [
         {key:'_sel', label:'', narrow:true, nosort:true, render:function(r){ var id=storeId(r); return '<input type="checkbox" class="storechk" data-sid="'+esc(id)+'"'+(STATE.categorySelectedStores.has(id)?' checked':'')+'/>'; }},
         {key:'address', label:'Address', render:function(r){ return '<span class="addr">'+esc(r.address)+', '+esc(r.city)+' '+esc(r.state)+'</span>'+(r.photos&&r.photos.length? ' <span title="'+r.photos.length+' photo(s) available">📷</span>' : ''); }},
-        {key:'month', label:'Data from', render:function(r){ return MONTH_LABEL[r.month]||r.month; }},
         {key:'healthScore', label:'Health', num:true, render:function(r){ return healthPill(r.healthScore); }},
         {key:'gaps', label:'Open gaps', render:function(r){ return gapBadges(r); }}
       ], stores, {initialSort:'healthScore', initialDir:'desc', onRowClick:function(r){
@@ -1335,7 +1322,6 @@ function renderCategory(){
         return '<input type="checkbox" class="rowchk" data-chain="'+esc(r.name)+'"'+(STATE.categorySelectedChains.has(r.name)?' checked':'')+'/>';
       }},
       {key:'name', label:'Chain'},
-      {key:'distinctStoreCount', label:'Stores', num:true, render:function(r){return r.distinctStoreCount!==null? r.distinctStoreCount : '<span class="muted">—</span>';}},
       {key:'storeCount', label:'Store visits', num:true},
       {key:'avgHealth', label:'Health', num:true, render:function(r){return healthPill(r.avgHealth);}},
       {key:'pctCompliant', label:'% Compliant', num:true, render:function(r){return fmtPct(r.pctCompliant);}},

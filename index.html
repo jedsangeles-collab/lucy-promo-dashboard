@@ -659,7 +659,7 @@ var STATE = {
   tab:'overview', mapMetric:'avgHealth', mapMonth:'2026-05', selectedState:null, healthMonth:'2026-05', categorySearch:'',
   categoryFilters:{lossMonths:false, unpaidRebate:false, belowHealth:false, noFinancials:false},
   categorySelectedChains:new Set(), categoryExpandedChain:null, categorySelectedStores:new Set(),
-  velocitySearch:'', categoryVisitSearch:'', categoryExpandedAddress:null
+  velocitySearch:'', categoryExpandedAddress:null
 };
 var TAB_META = {
   overview: {title:'Overview', desc:"Field operations & promo analytics pipeline, end to end."},
@@ -1200,19 +1200,18 @@ function renderCategory(){
       html2 += '</div>';
     }
 
-    // ---- 2. Site Visit Report History ----
-    html2 += '<div class="card" style="margin-top:16px;">';
-    html2 += '<div class="card-title">Site Visit Report History'+(STATE.categoryExpandedAddress? (' — '+esc(STATE.categoryExpandedAddress.split('|')[0])) : '')+'</div>';
-    if(!allVisits.length){
-      html2 += '<div class="section-sub" style="margin:0;">No site visits recorded for this '+(STATE.categoryExpandedAddress?'store':'chain')+'.</div>';
-    } else {
-      html2 += '<div class="section-sub" style="margin:0 0 10px;">'+allVisits.length+' visit'+(allVisits.length>1?'s':'')+' across Apr–May 2026. Click a column to sort'+(STATE.categoryExpandedAddress?'.':'; filter by store below.')+'</div>';
-      if(!STATE.categoryExpandedAddress){
-        html2 += '<div class="searchbox" style="margin-bottom:12px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="catVisitSearch" placeholder="Filter by store address…" value="'+esc(STATE.categoryVisitSearch)+'"/></div>';
+    // ---- 2. Site Visit Report History (only once a specific address is selected) ----
+    if(STATE.categoryExpandedAddress){
+      html2 += '<div class="card" style="margin-top:16px;">';
+      html2 += '<div class="card-title">Site Visit Report History — '+esc(STATE.categoryExpandedAddress.split('|')[0])+'</div>';
+      if(!allVisits.length){
+        html2 += '<div class="section-sub" style="margin:0;">No site visits recorded for this store.</div>';
+      } else {
+        html2 += '<div class="section-sub" style="margin:0 0 10px;">'+allVisits.length+' visit'+(allVisits.length>1?'s':'')+' across Apr–May 2026. Click a column to sort.</div>';
+        html2 += '<div class="table-wrap"><div id="catVisitTable"></div></div>';
       }
-      html2 += '<div class="table-wrap"><div id="catVisitTable"></div></div>';
+      html2 += '</div>';
     }
-    html2 += '</div>';
 
     // ---- 3. Health Report Metrics (categorized from the visit notes above) ----
     html2 += '<div class="card" style="margin-top:16px;">';
@@ -1306,12 +1305,8 @@ function renderCategory(){
       }));
     }
 
-    if(allVisits.length){
-      var visitSearchInput = document.getElementById('catVisitSearch');
-      if(visitSearchInput) visitSearchInput.addEventListener('input', function(e){ STATE.categoryVisitSearch=e.target.value; drawExpand(); });
-      var visitRows = allVisits.filter(function(s){
-        return STATE.categoryExpandedAddress || !STATE.categoryVisitSearch || (s.address||'').toLowerCase().indexOf(STATE.categoryVisitSearch.toLowerCase())>=0;
-      }).map(function(s){
+    if(STATE.categoryExpandedAddress && allVisits.length){
+      var visitRows = allVisits.map(function(s){
         return {
           dateSort: Date.parse(s.visitTime.replace(/\s*-\s*\d+$/,'')) || 0,
           date: s.visitTime.replace(/\s*-\s*\d+$/,''),

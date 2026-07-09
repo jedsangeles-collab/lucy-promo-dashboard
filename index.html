@@ -617,8 +617,10 @@ function renderTable(container, columns, rows, opts){
   function draw(){
     var sorted = rows.slice().sort(function(a,b){
       var av=a[sortKey], bv=b[sortKey];
-      if(av===null||av===undefined) av = typeof bv==='number'? -Infinity : '';
-      if(bv===null||bv===undefined) bv = typeof av==='number'? -Infinity : '';
+      var aNull = (av===null||av===undefined), bNull = (bv===null||bv===undefined);
+      if(aNull && bNull) return 0;
+      if(aNull) return 1;
+      if(bNull) return -1;
       if(typeof av==='string') return sortDir==='asc'? (''+av).localeCompare(bv) : (''+bv).localeCompare(av);
       return sortDir==='asc'? av-bv : bv-av;
     });
@@ -1371,7 +1373,7 @@ function renderCategory(){
       {key:'avgCostPerCan', label:'Cost / can', num:true, render:function(r){return r.avgCostPerCan?'$'+r.avgCostPerCan.toFixed(2):'—';}},
       {key:'netMarginTotal', label:'Net margin (life)', num:true, render:function(r){return r.netMarginTotal!==null?('<span style="color:'+(r.netMarginTotal<0?'var(--bad)':'inherit')+'">'+fmtMoney(r.netMarginTotal)+'</span>'):'—';}},
       {key:'negMonths', label:'Loss months', num:true, render:function(r){return r.negMonths>0?'<span class="pill bad">'+r.negMonths+'</span>':'<span class="pill good">0</span>';}}
-    ], rows, {initialSort:'estRevenue', onRowClick:function(r){
+    ], rows, {initialSort:'avgHealth', initialDir:'asc', onRowClick:function(r){
       STATE.categoryExpandedChain = (STATE.categoryExpandedChain===r.name)? null : r.name;
       STATE.categoryExpandedAddress = null;
       draw();
